@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>水槽シミュレーター</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=M+PLUS+Rounded+1c:wght@400;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'M PLUS Rounded 1c', sans-serif;
+        }
+        .canvas-container {
+            border: 1px solid #d1d5db; /* gray-300 */
+            background: rgba(255, 255, 255, 0.2);
+        }
+        .active-btn {
+            background-image: linear-gradient(to bottom right, #3b82f6, #60a5fa);
+            color: white;
+            border-color: transparent;
+            box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.2);
+            transform: scale(1.05);
+        }
+        .modal {
+            display: none;
+            transition: opacity 0.3s ease;
+        }
+        .modal.is-open {
+            display: flex;
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-sky-100 via-purple-100 to-blue-200 text-gray-800 p-4 sm:p-6 md:p-8 min-h-screen">
+
+    <div class="max-w-6xl mx-auto bg-white/70 backdrop-blur-xl p-4 sm:p-6 rounded-2xl shadow-2xl border border-white/30">
+        <header class="text-center mb-6 relative">
+            <div id="normalHeader">
+                <h1 class="text-4xl font-extrabold text-gray-800">水槽シミュレーター</h1>
+                <p class="mt-2 text-md text-gray-600">ブロックの配置によって水位がどう変わるか、グラフで確かめてみよう！</p>
+            </div>
+            <div id="challengeHeader" class="hidden">
+                <h1 class="text-4xl font-extrabold text-purple-800">チャレンジモード</h1>
+                <p class="mt-2 text-md text-gray-600">
+                    挑戦回数: <span id="challengeTryCount" class="font-bold">1</span> / 3 | 前回の一致率: <span id="challengeMatchRate" class="font-bold">-</span>
+                </p>
+            </div>
+            <button id="challengeModeBtn" class="absolute top-0 right-0 px-4 py-2 bg-gradient-to-br from-purple-500 to-indigo-600 text-white font-bold rounded-lg shadow-lg transform hover:scale-105 transition-transform">チャレンジモード</button>
+            <button id="backBtn" class="hidden absolute top-0 right-0 px-4 py-2 bg-gradient-to-br from-gray-500 to-gray-600 text-white font-bold rounded-lg shadow-lg transform hover:scale-105 transition-transform">戻る</button>
+        </header>
+
+        <!-- コントロールパネル -->
+        <div id="controls" class="bg-white/80 p-4 rounded-xl shadow-inner mb-6 flex flex-wrap items-center justify-center gap-4">
+            <div>
+                <span class="font-bold mr-3 text-gray-700">形:</span>
+                <button id="shapeSquare" class="px-4 py-2 border border-gray-300 bg-white rounded-lg font-semibold transition-all duration-200 hover:shadow-md hover:border-transparent">□ 四角</button>
+                <button id="shapeTriangle" class="px-4 py-2 border border-gray-300 bg-white rounded-lg font-semibold transition-all duration-200 hover:shadow-md hover:border-transparent">◣ 三角</button>
+            </div>
+            <div class="h-8 w-px bg-gray-300 hidden sm:block mx-2"></div>
+            <div>
+                <span class="font-bold mr-3 text-gray-700">大きさ:</span>
+                <button id="block1x1" class="px-4 py-2 border border-gray-300 bg-white rounded-lg font-semibold transition-all duration-200 hover:shadow-md hover:border-transparent">1x1</button>
+                <button id="block2x2" class="px-4 py-2 border border-gray-300 bg-white rounded-lg font-semibold transition-all duration-200 hover:shadow-md hover:border-transparent">2x2</button>
+                <button id="block3x3" class="px-4 py-2 border border-gray-300 bg-white rounded-lg font-semibold transition-all duration-200 hover:shadow-md hover:border-transparent">3x3</button>
+            </div>
+            <div class="h-8 w-px bg-gray-300 hidden sm:block mx-2"></div>
+            <div>
+                <button id="startBtn" class="px-6 py-2 bg-gradient-to-br from-green-500 to-green-600 text-white font-bold rounded-lg transition-all duration-300 shadow-lg transform hover:scale-105 hover:shadow-xl disabled:opacity-50 disabled:scale-100">スタート</button>
+                <button id="resetBtn" class="px-6 py-2 bg-gradient-to-br from-red-500 to-red-600 text-white font-bold rounded-lg transition-all duration-300 shadow-lg transform hover:scale-105 hover:shadow-xl">リセット</button>
+            </div>
+        </div>
+
+        <!-- シミュレーター本体 -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <!-- 水槽エリア -->
+            <div class="bg-white/60 p-4 rounded-xl shadow-lg border border-white/20">
+                <h2 class="text-xl font-bold mb-3 text-center text-gray-700">水槽</h2>
+                <div class="flex justify-center">
+                     <canvas id="tankCanvas" width="400" height="400" class="canvas-container"></canvas>
+                </div>
+            </div>
+
+            <!-- グラフエリア -->
+            <div class="bg-white/60 p-4 rounded-xl shadow-lg border border-white/20">
+                <h2 class="text-xl font-bold mb-3 text-center text-gray-700">水位グラフ</h2>
+                <div class="flex justify-center">
+                    <div class="relative">
+                        <canvas id="graphCanvas" width="400" height="400" class="canvas-container"></canvas>
+                        <span class="absolute -bottom-5 right-0 text-sm font-semibold text-gray-500">時間</span>
+                        <span class="absolute -left-6 top-0 text-sm font-semibold text-gray-500 text-center leading-tight">水<br>位</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 説明 -->
+        <div class="mt-8 bg-white/60 p-6 rounded-xl shadow-lg border border-white/20">
+            <h3 class="text-lg font-bold mb-2 text-gray-700">使い方</h3>
+            <ol class="list-decimal list-inside space-y-1 text-gray-600">
+                <li>「形」と「大きさ」ボタンで、水槽に置きたいブロックを選びます。</li>
+                <li>水槽の中の好きな場所をクリックすると、ブロックを配置・削除できます。ドラッグで移動も可能です。</li>
+                <li>「スタート」ボタンを押すとシミュレーションが開始され、右側にグラフが描画されます。</li>
+                <li>「チャレンジモード」ボタンから、パスワードを入力すると、お手本と同じグラフを作るチャレンジができます。</li>
+                <li>「リセット」ボタンを押すと、水槽とグラフが初期状態に戻ります。</li>
+            </ol>
+        </div>
+    </div>
+
+    <!-- モーダル (パスワード) -->
+    <div id="passwordModal" class="modal fixed inset-0 bg-black/50 items-center justify-center">
+        <div class="bg-white rounded-lg p-8 shadow-2xl text-center w-80">
+            <h2 class="text-2xl font-bold mb-4">パスワードを入力</h2>
+            <input type="password" id="passwordInput" class="border-2 border-gray-300 rounded-md p-2 text-center text-lg tracking-widest mb-4 w-full">
+            <p id="passwordError" class="text-red-500 h-6 mb-2"></p>
+            <div class="flex justify-center gap-4">
+                <button id="passwordSubmit" class="px-6 py-2 bg-blue-500 text-white font-semibold rounded-lg">決定</button>
+                <button id="passwordCancel" class="px-6 py-2 bg-gray-300 rounded-lg">キャンセル</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- モーダル (難易度選択) -->
+    <div id="difficultyModal" class="modal fixed inset-0 bg-black/50 items-center justify-center">
+        <div class="bg-white rounded-lg p-8 shadow-2xl text-center">
+            <h2 class="text-2xl font-bold mb-6">難易度を選択</h2>
+            <div class="flex flex-col sm:flex-row justify-center gap-4">
+                <button class="difficulty-btn px-6 py-3 bg-green-500 text-white font-bold rounded-lg text-lg" data-difficulty="easy">初級</button>
+                <button class="difficulty-btn px-6 py-3 bg-yellow-500 text-white font-bold rounded-lg text-lg" data-difficulty="medium">中級</button>
+                <button class="difficulty-btn px-6 py-3 bg-red-500 text-white font-bold rounded-lg text-lg" data-difficulty="hard">上級</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- モーダル (結果表示) -->
+    <div id="resultModal" class="modal fixed inset-0 bg-black/50 items-center justify-center">
+        <div class="bg-white rounded-lg p-8 shadow-2xl text-center">
+            <h2 class="text-3xl font-bold mb-4">チャレンジ終了！</h2>
+            <div id="resultScores" class="text-lg space-y-2 mb-4"></div>
+            <div class="border-t pt-4">
+                <h3 id="resultDifficulty" class="text-xl font-bold text-gray-700"></h3>
+                <p class="text-2xl font-bold">最高スコア: <span id="highScore" class="text-blue-600"></span> %</p>
+            </div>
+            <div class="mt-6 flex justify-center gap-4">
+                <button id="retryBtn" class="px-6 py-3 bg-green-500 text-white font-semibold rounded-lg text-lg">難易度選択に戻る</button>
+                <button id="resultClose" class="px-6 py-3 bg-gray-500 text-white font-semibold rounded-lg text-lg">モード終了</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            // --- canvas & UI要素 ---
+            const tankCanvas = document.getElementById('tankCanvas');
+            const graphCanvas = document.getElementById('graphCanvas');
+            const tankCtx = tankCanvas.getContext('2d');
+            const graphCtx = graphCanvas.getContext('2d');
+            const controls = document.getElementById('controls');
+            const normalHeader = document.getElementById('normalHeader');
+            const challengeHeader = document.getElementById('challengeHeader');
+            const tryCountEl = document.getElementById('challengeTryCount');
+            const matchRateEl = document.getElementById('challengeMatchRate');
+
+
+            // --- モーダル関連 ---
+            const passwordModal = document.getElementById('passwordModal');
+            const difficultyModal = document.getElementById('difficultyModal');
+            const resultModal = document.getElementById('resultModal');
+            
+            // --- 定数と変数 ---
+            const GRID_SIZE = 10;
+            const CELL_SIZE = tankCanvas.width / GRID_SIZE;
+            const WATER_FILL_RATE = 0.5;
+            let blocks = [];
+            let selectedBlockSize = 1;
+            let selectedShape = 'square';
+            let isSimulating = false;
+            let waterArea = 0;
+            let waterLevel = 0;
+            let time = 0;
+            let animationFrameId;
+            let graphPoints = [];
+            let slopeChangePoints = [];
+            let lastSlope = -1;
+            let hoverPoint = null;
+            let isDragging = false;
+            let draggedBlock = null;
+            let mouseOffset = { x: 0, y: 0 };
+            let dragStartPos = { x: 0, y: 0 };
+
+            // --- チャレンジモード用変数 ---
+            let isChallengeMode = false;
+            let currentDifficulty = '';
+            let targetGraphPoints = [];
+            let targetSlopeChangePoints = [];
+            let challengeTries = 0;
+            let challengeScores = [];
+
+            // --- UI要素の取得 (ボタンなど) ---
+            const challengeModeBtn = document.getElementById('challengeModeBtn');
+            const backBtn = document.getElementById('backBtn');
+            const shapeButtons = { 'square': document.getElementById('shapeSquare'), 'triangle': document.getElementById('shapeTriangle') };
+            const blockButtons = { '1': document.getElementById('block1x1'), '2': document.getElementById('block2x2'), '3': document.getElementById('block3x3') };
+            const startBtn = document.getElementById('startBtn');
+            const resetBtn = document.getElementById('resetBtn');
+
+            // --- ヘルパー関数 ---
+            function getBlockAt(gridX, gridY) {
+                for (let i = blocks.length - 1; i >= 0; i--) {
+                    const block = blocks[i];
+                    if (gridX >= block.x && gridX < block.x + block.size &&
+                        gridY >= block.y && gridY < block.y + block.size) {
+                        return block;
+                    }
+                }
+                return null;
+            }
+
+            function isOverlapping(newBlock, blockList) {
+                const list = blockList || blocks;
+                for (const existingBlock of list) {
+                    if (existingBlock === draggedBlock) continue;
+                    if (newBlock.x < existingBlock.x + existingBlock.size &&
+                        newBlock.x + newBlock.size > existingBlock.x &&
+                        newBlock.y < existingBlock.y + existingBlock.size &&
+                        newBlock.y + newBlock.size > existingBlock.y) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+            
+            // --- 描画関数 ---
+            function drawGrid(ctx, width, height) {
+                ctx.strokeStyle = 'rgba(107, 114, 128, 0.2)';
+                ctx.lineWidth = 1;
+                for (let i = 1; i < GRID_SIZE; i++) {
+                    ctx.beginPath();
+                    ctx.moveTo(0, i * CELL_SIZE);
+                    ctx.lineTo(width, i * CELL_SIZE);
+                    ctx.stroke();
+                    ctx.beginPath();
+                    ctx.moveTo(i * CELL_SIZE, 0);
+                    ctx.lineTo(i * CELL_SIZE, height);
+                    ctx.stroke();
+                }
+            }
+            
+            function drawTank() {
+                tankCtx.clearRect(0, 0, tankCanvas.width, tankCanvas.height);
+
+                if (waterLevel > 0) {
+                    const waterHeight = waterLevel * CELL_SIZE;
+                    const waterY = tankCanvas.height - waterHeight;
+                    const waterGradient = tankCtx.createLinearGradient(0, waterY, 0, tankCanvas.height);
+                    waterGradient.addColorStop(0, 'rgba(59, 130, 246, 0.7)');
+                    waterGradient.addColorStop(1, 'rgba(37, 99, 235, 0.8)');
+                    tankCtx.fillStyle = waterGradient;
+                    tankCtx.fillRect(0, waterY, tankCanvas.width, waterHeight);
+                }
+
+                drawGrid(tankCtx, tankCanvas.width, tankCanvas.height);
+
+                blocks.forEach(block => {
+                    const x = block.x * CELL_SIZE;
+                    const y = block.y * CELL_SIZE;
+                    const size = block.size * CELL_SIZE;
+                    
+                    if (block.shape === 'triangle') {
+                        tankCtx.beginPath();
+                        tankCtx.moveTo(x, y);
+                        tankCtx.lineTo(x, y + size);
+                        tankCtx.lineTo(x + size, y + size);
+                        tankCtx.closePath();
+                        
+                        tankCtx.fillStyle = '#64748b';
+                        tankCtx.fill();
+                        tankCtx.strokeStyle = '#475569';
+                        tankCtx.lineWidth = 2;
+                        tankCtx.stroke();
+                    } else {
+                        tankCtx.fillStyle = '#64748b';
+                        tankCtx.fillRect(x, y, size, size);
+
+                        const bevelSize = 2;
+                        tankCtx.fillStyle = '#94a3b8';
+                        tankCtx.fillRect(x, y, size, bevelSize);
+                        tankCtx.fillRect(x, y, bevelSize, size);
+                        tankCtx.fillStyle = '#475569';
+                        tankCtx.fillRect(x, y + size - bevelSize, size, bevelSize);
+                        tankCtx.fillRect(x + size - bevelSize, y, bevelSize, size);
+                    }
+                });
+
+                if (isDragging && draggedBlock) {
+                    tankCtx.globalAlpha = 0.6;
+                    tankCtx.fillStyle = '#6B7280';
+                    tankCtx.fillRect(draggedBlock.x * CELL_SIZE, draggedBlock.y * CELL_SIZE, draggedBlock.size * CELL_SIZE, draggedBlock.size * CELL_SIZE);
+                    tankCtx.globalAlpha = 1.0;
+                }
+            }
+
+            function drawGraph() {
+                graphCtx.clearRect(0, 0, graphCanvas.width, graphCanvas.height);
+                drawGrid(graphCtx, graphCanvas.width, graphCanvas.height);
+                
+                const maxTime = 100 / WATER_FILL_RATE;
+
+                // 見本グラフの描画
+                if (isChallengeMode && targetGraphPoints.length > 1) {
+                    graphCtx.globalAlpha = 0.4;
+                    graphCtx.strokeStyle = '#9ca3af'; // gray-400
+                    graphCtx.lineWidth = 4;
+                    graphCtx.lineCap = 'round';
+                    graphCtx.lineJoin = 'round';
+                    graphCtx.beginPath();
+                    const startX = targetGraphPoints[0].x * (graphCanvas.width / maxTime);
+                    const startY = graphCanvas.height - (targetGraphPoints[0].y * CELL_SIZE);
+                    graphCtx.moveTo(startX, startY);
+
+                    for (let i = 1; i < targetGraphPoints.length; i++) {
+                        const pointX = targetGraphPoints[i].x * (graphCanvas.width / maxTime);
+                        const pointY = graphCanvas.height - (targetGraphPoints[i].y * CELL_SIZE);
+                        graphCtx.lineTo(pointX, pointY);
+                    }
+                    graphCtx.stroke();
+                    
+                    targetSlopeChangePoints.forEach(point => {
+                        graphCtx.fillStyle = 'rgba(0,0,0,0.5)';
+                        const pointX = point.x * (graphCanvas.width / maxTime);
+                        const pointY = graphCanvas.height - (point.y * CELL_SIZE);
+                        graphCtx.beginPath();
+                        graphCtx.arc(pointX, pointY, 5, 0, 2 * Math.PI);
+                        graphCtx.fill();
+                    });
+                    graphCtx.globalAlpha = 1.0;
+                }
+
+                // プレイヤーのグラフ描画
+                if (graphPoints.length > 1) {
+                    graphCtx.strokeStyle = '#EF4444';
+                    graphCtx.lineWidth = 4;
+                    graphCtx.lineCap = 'round';
+                    graphCtx.lineJoin = 'round';
+                    graphCtx.shadowColor = 'rgba(239, 68, 68, 0.5)';
+                    graphCtx.shadowBlur = 8;
+                    
+                    graphCtx.beginPath();
+                    const startX = graphPoints[0].x * (graphCanvas.width / maxTime);
+                    const startY = graphCanvas.height - (graphPoints[0].y * CELL_SIZE);
+                    graphCtx.moveTo(startX, startY);
+
+                    for (let i = 1; i < graphPoints.length; i++) {
+                        const pointX = graphPoints[i].x * (graphCanvas.width / maxTime);
+                        const pointY = graphCanvas.height - (graphPoints[i].y * CELL_SIZE);
+                        graphCtx.lineTo(pointX, pointY);
+                    }
+                    graphCtx.stroke();
+                    graphCtx.shadowColor = 'transparent';
+                    graphCtx.shadowBlur = 0;
+                }
+
+                slopeChangePoints.forEach(point => {
+                    graphCtx.fillStyle = 'black';
+                    const pointX = point.x * (graphCanvas.width / maxTime);
+                    const pointY = graphCanvas.height - (point.y * CELL_SIZE);
+                    graphCtx.beginPath();
+                    graphCtx.arc(pointX, pointY, 5, 0, 2 * Math.PI);
+                    graphCtx.fill();
+                });
+
+                if (hoverPoint) {
+                    const pointX = hoverPoint.x * (graphCanvas.width / maxTime);
+                    const pointY = graphCanvas.height - (hoverPoint.y * CELL_SIZE);
+                    
+                    graphCtx.strokeStyle = '#3b82f6';
+                    graphCtx.fillStyle = 'white';
+                    graphCtx.lineWidth = 2;
+                    graphCtx.beginPath();
+                    graphCtx.arc(pointX, pointY, 6, 0, 2 * Math.PI);
+                    graphCtx.fill();
+                    graphCtx.stroke();
+
+                    const displayTimeVal = (hoverPoint.x * 10) / maxTime;
+                    const displayLevel = hoverPoint.y;
+                    const text = `(${displayTimeVal.toFixed(1)}, ${displayLevel.toFixed(1)})`;
+                    
+                    graphCtx.font = 'bold 14px "M PLUS Rounded 1c"';
+                    const textWidth = graphCtx.measureText(text).width;
+                    
+                    const boxPadding = 5;
+                    const boxWidth = textWidth + boxPadding * 2;
+                    const boxHeight = 20;
+                    let boxX = pointX - boxWidth / 2;
+                    let boxY = pointY - boxHeight - 10;
+                    
+                    if (boxY < 0) { boxY = pointY + 10; }
+                    if (boxX < 0) { boxX = 0; }
+                    if (boxX + boxWidth > graphCanvas.width) { boxX = graphCanvas.width - boxWidth; }
+                    
+                    graphCtx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+                    graphCtx.fillRect(boxX, boxY, boxWidth, boxHeight);
+                    graphCtx.strokeStyle = '#ccc';
+                    graphCtx.strokeRect(boxX, boxY, boxWidth, boxHeight);
+
+                    graphCtx.fillStyle = 'black';
+                    graphCtx.textAlign = 'center';
+                    graphCtx.textBaseline = 'middle';
+                    graphCtx.fillText(text, boxX + boxWidth / 2, boxY + boxHeight / 2);
+                }
+            }
+
+            // --- イベントリスナー ---
+            
+            Object.keys(shapeButtons).forEach(shape => {
+                shapeButtons[shape].addEventListener('click', () => {
+                    if (isSimulating) return;
+                    selectedShape = shape;
+                    updateActiveButtons();
+                });
+            });
+
+            Object.keys(blockButtons).forEach(size => {
+                blockButtons[size].addEventListener('click', () => {
+                    if (isSimulating) return;
+                    selectedBlockSize = parseInt(size);
+                    updateActiveButtons();
+                });
+            });
+            
+            startBtn.addEventListener('click', () => {
+                const currentState = startBtn.textContent;
+                if (currentState === 'スタート') {
+                    if (!isSimulating) {
+                        waterArea = 0;
+                        waterLevel = 0;
+                        time = 0;
+                        graphPoints = [{x: 0, y: 0}];
+                        slopeChangePoints = [{x: 0, y: 0}];
+                        lastSlope = -1;
+
+                        isSimulating = true;
+                        startBtn.disabled = true;
+                        startBtn.textContent = 'シミュレーション中...';
+                        if (!isChallengeMode) {
+                            Object.values(blockButtons).forEach(btn => btn.disabled = true);
+                            Object.values(shapeButtons).forEach(btn => btn.disabled = true);
+                        }
+                        simulate();
+                    }
+                } else if (currentState === '水を抜く') {
+                    drainWater();
+                }
+            });
+
+            resetBtn.addEventListener('click', reset);
+
+            tankCanvas.addEventListener('mousedown', handleMouseDown);
+            tankCanvas.addEventListener('mouseup', handleMouseUp);
+            tankCanvas.addEventListener('mousemove', handleMouseMove);
+            tankCanvas.addEventListener('mouseleave', handleMouseLeave);
+            graphCanvas.addEventListener('mousemove', handleGraphMouseMove);
+            graphCanvas.addEventListener('mouseleave', handleGraphMouseLeave);
+
+
+            // --- マウス操作関数 ---
+            function handleMouseDown(e) {
+                const controlsLocked = isSimulating || (isChallengeMode && startBtn.textContent !== 'スタート');
+                if (controlsLocked) return;
+                const rect = tankCanvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                const gridX = Math.floor(mouseX / CELL_SIZE);
+                const gridY = Math.floor(mouseY / CELL_SIZE);
+
+                dragStartPos = { x: gridX, y: gridY };
+                const block = getBlockAt(gridX, gridY);
+
+                if (block) {
+                    isDragging = true;
+                    draggedBlock = block;
+                    mouseOffset = { x: gridX - block.x, y: gridY - block.y };
+                    tankCanvas.style.cursor = 'grabbing';
+                }
+            }
+
+            function handleMouseMove(e) {
+                const rect = tankCanvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                const gridX = Math.floor(mouseX / CELL_SIZE);
+                const gridY = Math.floor(mouseY / CELL_SIZE);
+                const controlsLocked = isSimulating || (isChallengeMode && startBtn.textContent !== 'スタート');
+
+                if (isDragging && draggedBlock) {
+                    draggedBlock.x = gridX - mouseOffset.x;
+                    draggedBlock.y = gridY - mouseOffset.y;
+                    drawTank();
+                } else if (!controlsLocked) {
+                    tankCanvas.style.cursor = getBlockAt(gridX, gridY) ? 'grab' : 'pointer';
+                } else {
+                    tankCanvas.style.cursor = 'default';
+                }
+            }
+
+            function handleMouseUp(e) {
+                const controlsLocked = isSimulating || (isChallengeMode && startBtn.textContent !== 'スタート');
+                if (controlsLocked) return;
+                const rect = tankCanvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const mouseY = e.clientY - rect.top;
+                const gridX = Math.floor(mouseX / CELL_SIZE);
+                const gridY = Math.floor(mouseY / CELL_SIZE);
+
+                const wasClick = (dragStartPos.x === gridX && dragStartPos.y === gridY);
+
+                if (isDragging) {
+                    if (wasClick) {
+                        blocks = blocks.filter(b => b !== draggedBlock);
+                    } else {
+                        const finalPos = { x: gridX - mouseOffset.x, y: gridY - mouseOffset.y, size: draggedBlock.size };
+                        if (finalPos.x >= 0 && finalPos.x + draggedBlock.size <= GRID_SIZE &&
+                            finalPos.y >= 0 && finalPos.y + draggedBlock.size <= GRID_SIZE &&
+                            !isOverlapping(finalPos)) {
+                            draggedBlock.x = finalPos.x;
+                            draggedBlock.y = finalPos.y;
+                        }
+                    }
+                } else if (wasClick) {
+                    const blockAtPos = getBlockAt(gridX, gridY);
+                    if (blockAtPos) {
+                        blocks = blocks.filter(b => b !== blockAtPos);
+                    } else {
+                        placeBlock(gridX, gridY);
+                    }
+                }
+
+                isDragging = false;
+                draggedBlock = null;
+                handleMouseMove(e);
+                drawTank();
+            }
+            
+            function handleMouseLeave(e) {
+                if(isDragging) {
+                    isDragging = false;
+                    draggedBlock = null;
+                    drawTank();
+                }
+                tankCanvas.style.cursor = 'default';
+            }
+            
+            function handleGraphMouseMove(e) {
+                if (graphPoints.length === 0 && targetGraphPoints.length === 0) return;
+                
+                const pointsToCheck = graphPoints.length > 0 ? graphPoints : targetGraphPoints;
+
+                const rect = graphCanvas.getBoundingClientRect();
+                const mouseX = e.clientX - rect.left;
+                const maxTime = 100 / WATER_FILL_RATE;
+                const hoverTime = (mouseX / graphCanvas.width) * maxTime;
+
+                hoverPoint = pointsToCheck.reduce((prev, curr) => 
+                    (Math.abs(curr.x - hoverTime) < Math.abs(prev.x - hoverTime) ? curr : prev)
+                );
+                drawGraph();
+            }
+
+            function handleGraphMouseLeave(e) {
+                hoverPoint = null;
+                drawGraph();
+            }
+
+            // --- ロジック関数 ---
+            function updateActiveButtons() {
+                Object.values(shapeButtons).forEach(btn => btn.classList.remove('active-btn'));
+                shapeButtons[selectedShape].classList.add('active-btn');
+                Object.values(blockButtons).forEach(btn => btn.classList.remove('active-btn'));
+                blockButtons[selectedBlockSize].classList.add('active-btn');
+            }
+
+            function placeBlock(startX, startY) {
+                const newBlock = {x: startX, y: startY, size: selectedBlockSize, shape: selectedShape};
+                if (startX + newBlock.size > GRID_SIZE || startY + newBlock.size > GRID_SIZE || isOverlapping(newBlock)) {
+                    return;
+                }
+                blocks.push(newBlock);
+            }
+
+            function calculateWaterLevel(area, blockLayout) {
+                const currentBlocks = blockLayout || blocks;
+                let currentArea = 0;
+                for (let y = GRID_SIZE - 1; y >= 0; y--) {
+                    const grid = Array(GRID_SIZE).fill(0).map(() => Array(GRID_SIZE).fill(0));
+                    currentBlocks.forEach(b => {
+                        for(let by = b.y; by < b.y + b.size; by++){
+                            for(let bx = b.x; bx < b.x + b.size; bx++){
+                                if(by < GRID_SIZE && bx < GRID_SIZE){
+                                    if(b.shape === 'square'){
+                                        grid[by][bx] = 1;
+                                    } else if(b.shape === 'triangle'){
+                                        if(bx < b.x + (by - b.y) + 1){
+                                            grid[by][bx] = 1;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+
+                    const rowAvailableWidth = grid[y].filter(cell => cell === 0).length;
+
+                    if (rowAvailableWidth > 0) {
+                        if (currentArea + rowAvailableWidth >= area) {
+                            const waterNeededForRow = area - currentArea;
+                            const levelInRow = waterNeededForRow / rowAvailableWidth;
+                            return (GRID_SIZE - 1 - y) + levelInRow;
+                        }
+                        currentArea += rowAvailableWidth;
+                    }
+                }
+                return GRID_SIZE;
+            }
+            
+            function simulate() {
+                if (!isSimulating) return;
+                
+                const blockArea = blocks.reduce((acc, block) => {
+                    return acc + (block.shape === 'triangle' ? (block.size * block.size) / 2 : (block.size * block.size));
+                }, 0);
+                const maxArea = 100 - blockArea;
+
+                const prevWaterLevel = waterLevel;
+                waterArea += WATER_FILL_RATE;
+                time++;
+
+                if (waterArea >= maxArea) waterArea = maxArea;
+                
+                waterLevel = calculateWaterLevel(waterArea);
+                graphPoints.push({ x: time, y: waterLevel });
+
+                const currentSlope = waterLevel - prevWaterLevel;
+                if (Math.abs(currentSlope - lastSlope) > 1e-9 && lastSlope !== -1) {
+                    if (graphPoints.length > 1) slopeChangePoints.push(graphPoints[graphPoints.length - 2]);
+                }
+                lastSlope = currentSlope;
+                
+                drawTank();
+                drawGraph();
+                
+                if (waterLevel >= GRID_SIZE - 1e-9) {
+                    const lastPoint = graphPoints[graphPoints.length-1];
+                    lastPoint.y = GRID_SIZE; 
+                    
+                    if (!slopeChangePoints.some(p => p.x === lastPoint.x && p.y === lastPoint.y)) {
+                       slopeChangePoints.push(lastPoint);
+                    }
+                    drawGraph();
+                    isSimulating = false;
+
+                    if(isChallengeMode){
+                        handleChallengeTryEnd();
+                    } else {
+                        startBtn.textContent = '水を抜く';
+                        startBtn.disabled = false;
+                        tankCanvas.style.cursor = 'default';
+                        Object.values(blockButtons).forEach(btn => btn.disabled = false);
+                        Object.values(shapeButtons).forEach(btn => btn.disabled = false);
+                    }
+                } else {
+                    animationFrameId = requestAnimationFrame(simulate);
+                }
+            }
+            
+            function drainWater() {
+                cancelAnimationFrame(animationFrameId);
+                isSimulating = false;
+                waterArea = 0;
+                waterLevel = 0;
+                time = 0;
+                graphPoints = [];
+                slopeChangePoints = [];
+                lastSlope = -1;
+                hoverPoint = null;
+
+                startBtn.textContent = 'スタート';
+                startBtn.disabled = false;
+                if (!isChallengeMode) {
+                    Object.values(blockButtons).forEach(btn => btn.disabled = false);
+                    Object.values(shapeButtons).forEach(btn => btn.disabled = false);
+                }
+                tankCanvas.style.cursor = 'pointer';
+                
+                drawTank();
+                drawGraph();
+            }
+
+            function reset() {
+                drainWater();
+                blocks = [];
+                drawTank();
+                if (!isChallengeMode) {
+                    drawGraph();
+                } else {
+                    drawGraph();
+                }
+            }
+
+            // --- チャレンジモード関連の関数 ---
+            function startChallenge(difficulty) {
+                isChallengeMode = true;
+                currentDifficulty = difficulty;
+                challengeTries = 0;
+                challengeScores = [];
+                
+                normalHeader.classList.add('hidden');
+                challengeHeader.classList.remove('hidden');
+                challengeModeBtn.classList.add('hidden');
+                backBtn.classList.remove('hidden');
+                
+                generateTargetGraph(difficulty);
+                
+                reset();
+                tryCountEl.textContent = '1';
+                matchRateEl.textContent = '-';
+                startBtn.textContent = 'スタート';
+            }
+
+            function generateTargetGraph(difficulty) {
+                targetGraphPoints = [];
+                targetSlopeChangePoints = [];
+                let targetBlocks = [];
+                let attempts = 0;
+                
+                while (attempts < 500) {
+                    targetBlocks = [];
+                    let numBlocks;
+                    if(difficulty === 'easy') numBlocks = 2 + Math.floor(Math.random() * 2); 
+                    else if(difficulty === 'medium') numBlocks = 4 + Math.floor(Math.random() * 2);
+                    else numBlocks = 5 + Math.floor(Math.random() * 3);
+
+                    for (let i = 0; i < numBlocks; i++) {
+                        const size = Math.floor(Math.random() * 2) + 1;
+                        const shape = 'square';
+                        const x = Math.floor(Math.random() * (GRID_SIZE - size + 1));
+                        const y = Math.floor(Math.random() * (GRID_SIZE - size + 1));
+                        const newBlock = { x, y, size, shape };
+                        if (!isOverlapping(newBlock, targetBlocks)) {
+                            targetBlocks.push(newBlock);
+                        }
+                    }
+
+                    if (targetBlocks.length === 0) {
+                        attempts++;
+                        continue;
+                    }
+
+                    const tempGraph = getGraphForBlocks(targetBlocks);
+                    if (!tempGraph.points || tempGraph.points.length === 0) {
+                        attempts++;
+                        continue;
+                    }
+                    const actualChanges = tempGraph.slopeChanges.length - 2;
+                    
+                    let conditionMet = false;
+                    if (difficulty === 'easy' && actualChanges === 2) {
+                        conditionMet = true;
+                    } else if (difficulty === 'medium' && (actualChanges === 3 || actualChanges === 4)) {
+                        conditionMet = true;
+                    } else if (difficulty === 'hard' && actualChanges >= 5) {
+                        conditionMet = true;
+                    }
+
+                    if (conditionMet) {
+                        targetGraphPoints = tempGraph.points;
+                        targetSlopeChangePoints = tempGraph.slopeChanges;
+                        break;
+                    }
+                    
+                    attempts++;
+                }
+
+                if (targetGraphPoints.length === 0) {
+                    console.error("Failed to generate a target graph. Retrying with the same difficulty...");
+                    generateTargetGraph(difficulty);
+                }
+            }
+            
+            function getGraphForBlocks(blockList) {
+                let tempArea = 0;
+                let tempLevel = 0;
+                let tempTime = 0;
+                let tempPoints = [{x: 0, y: 0}];
+                let tempSlopeChanges = [{x: 0, y: 0}];
+                let tempLastSlope = -1;
+
+                const blockArea = blockList.reduce((acc, b) => acc + (b.size * b.size), 0);
+                const maxArea = 100 - blockArea;
+
+                if (maxArea <= 0) {
+                    return { points: [], slopeChanges: [] };
+                }
+
+                while (tempLevel < GRID_SIZE - 1e-9 && tempTime < 500) {
+                    const prevLevel = tempLevel;
+                    tempArea += WATER_FILL_RATE;
+                    tempTime++;
+                    if (tempArea >= maxArea) tempArea = maxArea;
+
+                    tempLevel = calculateWaterLevel(tempArea, blockList);
+                    tempPoints.push({ x: tempTime, y: tempLevel });
+                    
+                    const currentSlope = tempLevel - prevLevel;
+                    if (Math.abs(currentSlope - tempLastSlope) > 1e-9 && tempLastSlope !== -1) {
+                         if (tempPoints.length > 1) tempSlopeChanges.push(tempPoints[tempPoints.length - 2]);
+                    }
+                    tempLastSlope = currentSlope;
+                }
+
+                if(tempPoints.length > 1){
+                    const lastPoint = tempPoints[tempPoints.length - 1];
+                    lastPoint.y = GRID_SIZE;
+                    if (!tempSlopeChanges.some(p => p.x === lastPoint.x && p.y === lastPoint.y)) {
+                        tempSlopeChanges.push(lastPoint);
+                    }
+                }
+
+                return { points: tempPoints, slopeChanges: tempSlopeChanges };
+            }
+
+            function handleChallengeTryEnd() {
+                const matchRate = calculateMatchRate();
+                challengeScores.push(matchRate);
+                matchRateEl.innerHTML = `${matchRate.toFixed(1)} %`;
+                
+                challengeTries++;
+                
+                if (matchRate >= 99.99 || challengeTries >= 3) {
+                    showChallengeResults();
+                } else {
+                    tryCountEl.textContent = challengeTries + 1;
+                    startBtn.textContent = 'スタート';
+                    startBtn.disabled = false;
+                }
+            }
+
+            function calculateMatchRate() {
+                if (targetGraphPoints.length === 0 || graphPoints.length === 0) return 0;
+                
+                let totalDifference = 0;
+                const samplePoints = 200; // Check at 200 points in time
+
+                for(let i=0; i <= samplePoints; i++) {
+                    const time = i;
+                    const findY = (t, points) => {
+                        const point = points.find(p => p.x >= t);
+                        const prevPoint = points.slice().reverse().find(p => p.x <= t);
+                        if(point && prevPoint) {
+                            if(point.x === prevPoint.x) return point.y;
+                            const slope = (point.y - prevPoint.y) / (point.x - prevPoint.x);
+                            return prevPoint.y + slope * (t - prevPoint.x);
+                        }
+                        return (points[points.length-1] || {y:0}).y;
+                    };
+
+                    const targetY = findY(time, targetGraphPoints);
+                    const playerY = findY(time, graphPoints);
+                    totalDifference += Math.abs(targetY - playerY);
+                }
+
+                const avgDifference = totalDifference / samplePoints;
+                const matchPercentage = Math.max(0, 100 - (avgDifference * 20));
+                return matchPercentage;
+            }
+
+            function showChallengeResults() {
+                const difficultyMap = { 'easy': '初級', 'medium': '中級', 'hard': '上級' };
+                const resultDifficultyEl = document.getElementById('resultDifficulty');
+                resultDifficultyEl.textContent = difficultyMap[currentDifficulty] || '';
+
+                const resultScoresEl = document.getElementById('resultScores');
+                resultScoresEl.innerHTML = '';
+                for (let i = 0; i < 3; i++) {
+                    const score = challengeScores[i];
+                    if (score !== undefined) {
+                        resultScoresEl.innerHTML += `<p>${i + 1}回目: ${score.toFixed(1)} %</p>`;
+                    } else {
+                        resultScoresEl.innerHTML += `<p>${i + 1}回目: -</p>`;
+                    }
+                }
+                
+                const highScore = Math.max(...challengeScores);
+                document.getElementById('highScore').textContent = highScore.toFixed(1);
+                resultModal.classList.add('is-open');
+
+                if (highScore >= 99.99) {
+                    triggerConfetti();
+                }
+            }
+
+            function triggerConfetti() {
+                const confettiCount = 150;
+                const confettiContainer = document.body;
+                const colors = ['#f44336', '#e91e63', '#9c27b0', '#673ab7', '#3f51b5', '#2196f3', '#03a9f4', '#00bcd4', '#009688', '#4caf50', '#8bc34a', '#cddc39', '#ffeb3b', '#ffc107', '#ff9800'];
+
+                for (let i = 0; i < confettiCount; i++) {
+                    const confetti = document.createElement('div');
+                    confetti.style.position = 'absolute';
+                    confetti.style.left = `${Math.random() * 100}vw`;
+                    confetti.style.top = `${Math.random() * -50 - 50}px`;
+                    confetti.style.width = `${Math.random() * 8 + 4}px`;
+                    confetti.style.height = `${Math.random() * 15 + 5}px`;
+                    confetti.style.backgroundColor = colors[Math.floor(Math.random() * colors.length)];
+                    confetti.style.opacity = '0.9';
+                    confetti.style.transform = `rotate(${Math.random() * 360}deg)`;
+                    confetti.style.transition = 'top 4s ease-out, left 2s ease-in-out, transform 4s linear, opacity 4s ease-out';
+                    confetti.style.pointerEvents = 'none';
+                    confetti.style.zIndex = '9999';
+                    confettiContainer.appendChild(confetti);
+
+                    setTimeout(() => {
+                        confetti.style.top = '110vh';
+                        confetti.style.left = `${parseFloat(confetti.style.left) + (Math.random() - 0.5) * 40}vw`;
+                        confetti.style.transform = `rotate(${Math.random() * 720 + 360}deg)`;
+                        confetti.style.opacity = '0';
+                    }, 10);
+
+                    setTimeout(() => {
+                        confetti.remove();
+                    }, 4100);
+                }
+                
+                for(let i=0; i<3; i++) {
+                    const cracker = document.createElement('div');
+                    cracker.textContent = '🎉';
+                    cracker.style.position = 'absolute';
+                    cracker.style.fontSize = `${Math.random() * 40 + 40}px`;
+                    cracker.style.left = `${Math.random() * 80 + 10}vw`;
+                    cracker.style.top = `${Math.random() * 60 + 20}vh`;
+                    cracker.style.transition = 'transform 0.5s ease-out, opacity 0.5s ease-out';
+                    cracker.style.transform = 'scale(0)';
+                    cracker.style.opacity = '0';
+                    cracker.style.pointerEvents = 'none';
+                    cracker.style.zIndex = '9999';
+                    confettiContainer.appendChild(cracker);
+
+                    setTimeout(() => {
+                        cracker.style.transform = 'scale(1)';
+                        cracker.style.opacity = '1';
+                    }, i * 150);
+
+                    setTimeout(() => {
+                        cracker.style.transform = 'scale(0)';
+                        cracker.style.opacity = '0';
+                    }, i * 150 + 800);
+
+                    setTimeout(() => {
+                        cracker.remove();
+                    }, i * 150 + 1300);
+                }
+            }
+
+            function endChallenge() {
+                isChallengeMode = false;
+                currentDifficulty = '';
+                targetGraphPoints = [];
+                targetSlopeChangePoints = [];
+                
+                normalHeader.classList.remove('hidden');
+                challengeHeader.classList.add('hidden');
+                challengeModeBtn.classList.remove('hidden');
+                backBtn.classList.add('hidden');
+                
+                resultModal.classList.remove('is-open');
+                reset();
+            }
+
+            // --- 初期化 ---
+            function init() {
+                updateActiveButtons();
+                tankCanvas.style.cursor = 'pointer';
+                drawTank();
+                drawGraph();
+                
+                const passwordInput = document.getElementById('passwordInput');
+                
+                challengeModeBtn.addEventListener('click', () => {
+                    passwordModal.classList.add('is-open');
+                    setTimeout(() => passwordInput.focus(), 50);
+                });
+                
+                backBtn.addEventListener('click', endChallenge);
+
+                passwordInput.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        document.getElementById('passwordSubmit').click();
+                    }
+                });
+
+                document.getElementById('passwordSubmit').addEventListener('click', () => {
+                    const passwordError = document.getElementById('passwordError');
+                    if (passwordInput.value === '4156') {
+                        passwordModal.classList.remove('is-open');
+                        difficultyModal.classList.add('is-open');
+                        passwordInput.value = '';
+                        passwordError.textContent = '';
+                    } else {
+                        passwordError.textContent = 'パスワードが違います';
+                        passwordInput.value = '';
+                    }
+                });
+                document.getElementById('passwordCancel').addEventListener('click', () => {
+                    passwordModal.classList.remove('is-open');
+                    document.getElementById('passwordInput').value = '';
+                    document.getElementById('passwordError').textContent = '';
+                });
+
+                document.querySelectorAll('.difficulty-btn').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        difficultyModal.classList.remove('is-open');
+                        startChallenge(e.target.dataset.difficulty);
+                    });
+                });
+                document.getElementById('resultClose').addEventListener('click', endChallenge);
+                document.getElementById('retryBtn').addEventListener('click', () => {
+                    resultModal.classList.remove('is-open');
+                    difficultyModal.classList.add('is-open');
+                });
+            }
+
+            init();
+        });
+    </script>
+
+</body>
+</html>
+
